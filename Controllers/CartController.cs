@@ -1,17 +1,23 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Rocky.Data;
 using Rocky.Models;
+using Rocky.Models.ViewModels;
 using Rocky.Utility;
 
 namespace Rocky.Controllers
 {
+    [Authorize]
     public class CartController : Controller
     {
         private readonly ApplicationDbContext _db;
+        [BindProperty]
+        public ProductUserViewModel ProductUserVM { get; set; }
         public CartController(ApplicationDbContext db)
         {
             _db = db;
@@ -21,6 +27,44 @@ namespace Rocky.Controllers
 
             IEnumerable<Product> prodList = GetProductCart();
             return View(prodList);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [ActionName("Index")]
+        public IActionResult IndexPost()
+        {
+            
+            return RedirectToAction(nameof(Summary));
+        }
+
+        public IActionResult Summary()
+        {
+            // Find user info from Entity Framework
+            var identity = (ClaimsIdentity) User.Identity;
+            var claim = identity.FindFirst(ClaimTypes.NameIdentifier);
+            // var userId = User.FindFirstValue(ClaimTypes.Name);
+            var products = GetProductCart();
+            ProductUserVM = new ProductUserViewModel
+            {
+                ApplicationUser = _db.ApplicationUsers.FirstOrDefault(u => u.Id == claim.Value),
+                ProductList = products.ToList()           
+            };
+            return View(ProductUserVM);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [ActionName("Summary")]
+        public IActionResult SummaryPost(ProductUserViewModel productUserViewModel)
+        {          
+            return RedirectToAction(nameof(InquiryConfirmation));
+        }
+
+        public IActionResult InquiryConfirmation()
+        {
+            HttpContext.Session.Clear();
+            return View();
         }
 
         private IEnumerable<Product> GetProductCart()
@@ -48,10 +92,8 @@ namespace Rocky.Controllers
                 shoppingCartList.Remove(shoppingCartList.Find(item => item.ProductId == id));
                 // Set Session
                 HttpContext.Session.Set(WC.SessionCart, shoppingCartList);
-            }
-            IEnumerable<Product> prodList = GetProductCart();
-            return View(prodList);
-
+            }            
+            return RedirectToAction(nameof(Index));
         }
     }
 }
